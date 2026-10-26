@@ -308,7 +308,8 @@ func (d *defaultOps) Push(remote string, branches []string, force, atomic bool) 
 // ResolveRemote determines the remote for pushing a branch. It checks git
 // config keys in priority order (branch.<name>.pushRemote, remote.pushDefault,
 // branch.<name>.remote), then checks the gh-stack.remote saved preference,
-// then falls back to listing all remotes. If exactly one remote exists it is
+// then falls back to listing all remotes. Git's "." local-repository shorthand
+// is ignored when reading push configuration. If exactly one remote exists it is
 // returned. If multiple exist, ErrMultipleRemotes is returned with the list
 // attached. If none exist, a plain error is returned.
 func (d *defaultOps) ResolveRemote(branch string) (string, error) {
@@ -319,7 +320,7 @@ func (d *defaultOps) ResolveRemote(branch string) (string, error) {
 	}
 	for _, key := range candidates {
 		out, err := d.run("config", "--get", key)
-		if err == nil && out != "" {
+		if err == nil && out != "" && out != "." {
 			return out, nil
 		}
 	}

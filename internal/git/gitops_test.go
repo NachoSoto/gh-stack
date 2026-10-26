@@ -635,6 +635,55 @@ func TestIntegration_ResolveRemote_GitPushConfigTakesPrecedence(t *testing.T) {
 	assert.Equal(t, "origin", remote)
 }
 
+func TestIntegration_ResolveRemote_LocalUpstream(t *testing.T) {
+	tests := []struct {
+		name         string
+		secondRemote bool
+		config       map[string]string
+		want         string
+		wantMultiple bool
+	}{
+		{name: "single remote", want: "origin"},
+		{
+			name: "saved preference", secondRemote: true,
+			config: map[string]string{"gh-stack.remote": "upstream"},
+			want:   "upstream",
+		},
+		{
+			name: "push default takes precedence", secondRemote: true,
+			config: map[string]string{"remote.pushDefault": "origin", "gh-stack.remote": "upstream"},
+			want:   "origin",
+		},
+		{name: "multiple remotes need selection", secondRemote: true, wantMultiple: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, cloneDir := setupBareAndClone(t)
+			restore := withGitDir(t, cloneDir)
+			defer restore()
+
+			gitExec(t, cloneDir, "checkout", "--track", "-b", "feature", "main")
+			require.Equal(t, ".", gitExec(t, cloneDir, "config", "--get", "branch.feature.remote"))
+			if tt.secondRemote {
+				gitExec(t, cloneDir, "remote", "add", "upstream", cloneDir)
+			}
+			for key, value := range tt.config {
+				gitExec(t, cloneDir, "config", key, value)
+			}
+
+			remote, err := ResolveRemote("feature")
+			if tt.wantMultiple {
+				var multi *ErrMultipleRemotes
+				require.ErrorAs(t, err, &multi)
+				assert.ElementsMatch(t, []string{"origin", "upstream"}, multi.Remotes)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, remote)
+		})
+	}
+}
+
 func TestIntegration_SaveAndGetRemote(t *testing.T) {
 	_, cloneDir := setupBareAndClone(t)
 	restoreDir := withGitDir(t, cloneDir)
